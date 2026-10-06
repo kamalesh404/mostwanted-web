@@ -103,9 +103,6 @@ mostwanted-web/
 └── docs/banner.svg    # project banner
 ```
 
-## 🙏 Credits
-
-All 3D models are free assets from [Poly Pizza](https://poly.pizza) and the three.js example set — full attribution in [CREDITS.md](CREDITS.md). Inspired by *Need for Speed: Most Wanted (2005)*; a non-commercial fan tribute containing no EA assets, trademarks, or code.
 
 ## ⚖️ License
 
