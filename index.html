@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="MostWanted-Web — an open-world street racing browser game with police pursuits, blacklist rivals and real 3D cars." />
+    <title>MostWanted-Web — Street Racing</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0c10; font-family: "Segoe UI", system-ui, sans-serif; color: #e8ecf2; }
+      #app { position: fixed; inset: 0; }
+      canvas { display: block; }
+      #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+      .hud-box { position: absolute; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+      #cash-box { top: 14px; left: 16px; font-size: 20px; font-weight: 700; color: #ffd75e; }
+      #wins-box { top: 40px; left: 16px; font-size: 13px; opacity: .85; }
+      #heat-box { top: 14px; right: 16px; font-size: 22px; letter-spacing: 2px; }
+      #heat-box .star { color: #3a4150; }
+      #heat-box .star.lit { color: #ff5a3c; text-shadow: 0 0 10px #ff5a3c88; }
+      #pursuit-box { top: 48px; right: 16px; width: 170px; display: none; }
+      #pursuit-box .bar { height: 8px; background: #232a36; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+      #pursuit-box .bar > div { height: 100%; width: 0%; background: linear-gradient(90deg,#ffb14e,#ff3b30); transition: width .2s; }
+      #pursuit-label { font-size: 12px; font-weight: 700; color: #ff6b52; letter-spacing: 1px; }
+      #speedo-box { bottom: 18px; right: 18px; text-align: right; }
+      #speedo-num { font-size: 44px; font-weight: 800; line-height: 1; }
+      #speedo-unit { font-size: 12px; opacity: .7; letter-spacing: 2px; }
+      #nitro-bar { width: 150px; height: 7px; background: #232a36; border-radius: 4px; overflow: hidden; margin: 6px 0 0 auto; }
+      #nitro-bar > div { height: 100%; width: 100%; background: linear-gradient(90deg,#3fd0ff,#8f6bff); transition: width .1s; }
+      #minimap { position: absolute; bottom: 18px; left: 18px; width: 168px; height: 168px; border-radius: 10px; background: rgba(10,14,20,.72); border: 1px solid #2b3547; }
+      #race-box { top: 16px; left: 50%; transform: translateX(-50%); text-align: center; display: none; }
+      #race-pos { font-size: 30px; font-weight: 800; color: #ffd75e; }
+      #race-cp { font-size: 13px; opacity: .85; margin-top: 2px; }
+      #race-timer { font-size: 15px; opacity: .9; }
+      #toasts { position: absolute; top: 26%; width: 100%; text-align: center; }
+      .toast { display: inline-block; background: rgba(12,16,24,.85); border: 1px solid #39465c; padding: 10px 22px; border-radius: 10px; font-size: 18px; font-weight: 700; margin-top: 8px; animation: pop .25s ease-out; }
+      .toast.bad { border-color: #a33; color: #ff8f7a; }
+      .toast.good { border-color: #3a7; color: #7dffb0; }
+      @keyframes pop { from { transform: scale(.8); opacity: 0; } }
+      #center-msg { position: absolute; top: 34%; width: 100%; text-align: center; font-size: 84px; font-weight: 900; display: none; text-shadow: 0 4px 24px rgba(0,0,0,.8); }
+      /* markers */
+      .marker-info { position: absolute; top: 58%; width: 100%; text-align: center; font-size: 16px; font-weight: 700; color: #ffd75e; display: none; text-shadow: 0 1px 4px #000; }
+      /* menus */
+      .menu { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(6,9,14,.88); backdrop-filter: blur(6px); }
+      .menu.open { display: flex; }
+      .menu h1 { font-size: 46px; font-weight: 900; letter-spacing: 1px; }
+      .menu h1 span { color: #ff5a3c; }
+      .menu .sub { opacity: .7; margin: 8px 0 26px; font-size: 15px; }
+      .menu button { pointer-events: auto; cursor: pointer; background: #171d29; color: #e8ecf2; border: 1px solid #39465c; padding: 12px 30px; font-size: 16px; font-weight: 700; border-radius: 10px; margin: 5px; transition: all .15s; }
+      .menu button:hover { background: #232c3d; border-color: #5b7396; transform: translateY(-1px); }
+      .menu button.primary { background: #ff5a3c; border-color: #ff5a3c; color: #fff; }
+      .menu button.primary:hover { background: #ff7359; }
+      #loading .bar { width: 320px; height: 10px; background: #232a36; border-radius: 6px; overflow: hidden; margin-top: 20px; }
+      #loading .bar > div { height: 100%; width: 0%; background: #ff5a3c; transition: width .2s; }
+      #loading .status { margin-top: 12px; font-size: 13px; opacity: .7; }
+      #gameover h2 { font-size: 54px; font-weight: 900; }
+      #gameover .detail { margin: 10px 0 24px; opacity: .8; font-size: 16px; }
+      #gameover.lost h2 { color: #ff5a3c; } #gameover.won h2 { color: #7dffb0; }
+      #garage .panel { width: min(680px, 92vw); max-height: 86vh; overflow-y: auto; background: #10151f; border: 1px solid #2b3547; border-radius: 14px; padding: 24px; }
+      #garage h2 { font-size: 26px; margin-bottom: 4px; }
+      #garage .cash { color: #ffd75e; font-weight: 700; margin-bottom: 14px; }
+      .car-row { display: flex; align-items: center; gap: 14px; background: #171d29; border: 1px solid #2b3547; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+      .car-row.selected { border-color: #ffd75e; }
+      .car-row .name { font-weight: 800; font-size: 16px; }
+      .car-row .stats { font-size: 12px; opacity: .75; }
+      .car-row .spacer { flex: 1; }
+      .car-row button, .upg-row button { pointer-events: auto; cursor: pointer; background: #232c3d; border: 1px solid #39465c; color: #e8ecf2; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 700; }
+      .car-row button:disabled, .upg-row button:disabled { opacity: .4; cursor: default; }
+      .car-row button.primary { background: #ffd75e; border-color: #ffd75e; color: #1a1a10; }
+      .upg-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; font-size: 14px; }
+      .upg-row .pips { letter-spacing: 3px; color: #3fd0ff; }
+      .upg-row .spacer { flex: 1; }
+      .locked-note { font-size: 12px; opacity: .6; font-style: italic; }
+      /* mobile controls */
+      #touch { position: fixed; inset: 0; z-index: 15; display: none; pointer-events: none; }
+      body.touch #touch { display: block; }
+      .tbtn { position: absolute; width: 74px; height: 74px; border-radius: 50%; background: rgba(23,29,41,.55); border: 1px solid #4a5a74; color: #dfe7f2; font-size: 26px; font-weight: 900; display: flex; align-items: center; justify-content: center; pointer-events: auto; user-select: none; -webkit-user-select: none; touch-action: none; }
+      .tbtn:active { background: rgba(90,115,150,.6); }
+      #t-left { bottom: 26px; left: 200px; } #t-right { bottom: 26px; left: 290px; }
+      #t-nitro { bottom: 40px; right: 200px; width: 64px; height: 64px; font-size: 15px; color: #3fd0ff; border-color: #3fd0ff; }
+      #t-brake { bottom: 40px; right: 290px; width: 64px; height: 64px; font-size: 15px; color: #ffb14e; }
+      #t-action { top: 120px; left: 50%; transform: translateX(-50%); width: auto; height: 40px; border-radius: 20px; padding: 0 22px; font-size: 14px; background: rgba(255,90,60,.75); border-color: #ff5a3c; display: none; }
+      body.touch #t-action.show { display: flex; }
+      #dmg-box { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); font-size: 13px; color: #ffb14e; display: none; }
+      #fps { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font-size: 10px; opacity: .4; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud">
+      <div class="hud-box" id="cash-box">$0</div>
+      <div class="hud-box" id="wins-box">Wins 0 · Blacklist 5</div>
+      <div class="hud-box" id="heat-box"></div>
+      <div class="hud-box" id="pursuit-box"><div id="pursuit-label">PURSUIT</div><div class="bar"><div id="pursuit-fill"></div></div></div>
+      <div class="hud-box" id="speedo-box"><div id="speedo-num">0</div><div id="speedo-unit">KM/H</div><div id="nitro-bar"><div id="nitro-fill"></div></div></div>
+      <canvas id="minimap" width="336" height="336"></canvas>
+      <div class="hud-box" id="race-box"><div id="race-pos">1/4</div><div id="race-timer">0.0s</div><div id="race-cp">CP 1/4</div></div>
+      <div class="hud-box" id="dmg-box">TIRES DAMAGED</div>
+      <div id="toasts"></div>
+      <div id="center-msg"></div>
+      <div class="marker-info" id="marker-info">Press E to start the race</div>
+      <div id="fps"></div>
+    </div>
+    <div id="touch">
+      <div class="tbtn" id="t-left">‹</div><div class="tbtn" id="t-right">›</div>
+      <div class="tbtn" id="t-nitro">NOS</div><div class="tbtn" id="t-brake">BRK</div>
+      <div class="tbtn" id="t-action">ACTION</div>
+    </div>
+
+    <div class="menu open" id="loading">
+      <h1>MOST<span>WANTED</span>-WEB</h1>
+      <div class="sub">Open-world street racing · police pursuits · blacklist rivals</div>
+      <div class="bar"><div id="load-fill"></div></div>
+      <div class="status" id="load-status">Loading 3D models…</div>
+    </div>
+
+    <div class="menu" id="mainmenu">
+      <h1>MOST<span>WANTED</span>-WEB</h1>
+      <div class="sub" id="save-note">The city is yours. Cops are hunting. Become #1 on the blacklist.</div>
+      <button class="primary" id="btn-drive">DRIVE</button>
+      <button id="btn-reset">Reset save</button>
+      <div class="sub" style="margin-top:26px;font-size:13px">WASD/arrows drive · SHIFT nitrous · SPACE handbrake · E action · C camera · M mute</div>
+    </div>
+
+    <div class="menu" id="gameover">
+      <h2 id="go-title">BUSTED</h2>
+      <div class="detail" id="go-detail"></div>
+      <button class="primary" id="btn-continue">CONTINUE</button>
+    </div>
+
+    <div class="menu" id="garage">
+      <div class="panel">
+        <h2>GARAGE</h2>
+        <div class="cash" id="garage-cash"></div>
+        <div id="garage-cars"></div>
+        <div style="margin-top:10px;border-top:1px solid #2b3547;padding-top:12px">
+          <div style="font-weight:800;margin-bottom:6px" id="upg-title">Upgrades</div>
+          <div id="garage-upgs"></div>
+        </div>
+        <div style="text-align:center;margin-top:16px"><button class="primary" id="btn-garage-close">BACK TO THE STREETS</button></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
