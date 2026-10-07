@@ -44,6 +44,7 @@ export class CarController {
   private brakeLight: THREE.Mesh | null = null;
   private radius = 1.9;
   private colliders: AABB[] = [];
+  steerSmoothed = 0;
   private steerVis = 0;
   isPlayer = false;
   isStatic = false;
@@ -104,19 +105,24 @@ export class CarController {
     fSpeed = Math.max(-9, Math.min(fSpeed, top));
     fSpeed *= 1 - 0.06 * dt; // rolling drag
 
-    // --- steering ---
+    // --- smooth steering response ---
+    // Dynamic responsiveness: quick turn initiation based on grip, swift centering spring on release
+    const steerSpeed = input.steer !== 0 ? (7.0 + st.grip * 4.0) : 13.5;
+    this.steerSmoothed += (input.steer - this.steerSmoothed) * Math.min(1, dt * steerSpeed);
+    this.steerSmoothed = Math.max(-1, Math.min(1, this.steerSmoothed));
+
     const speedFactor = Math.min(1, Math.abs(fSpeed) / 9);
     const highSpeedTame = 1 / (1 + Math.abs(fSpeed) * 0.022);
     let steerRate = 2.1 * speedFactor * highSpeedTame * Math.sign(fSpeed || 1);
     if (input.handbrake) steerRate *= 1.5;
-    this.yaw += input.steer * steerRate * dt;
-    this.steerVis += ((input.steer * 0.45) - this.steerVis) * Math.min(1, dt * 10);
+    this.yaw += this.steerSmoothed * steerRate * dt;
+    this.steerVis += ((this.steerSmoothed * 0.45) - this.steerVis) * Math.min(1, dt * 12);
 
     // --- lateral grip & drift ---
     const grip = st.grip * gripMul * (input.handbrake ? 0.35 : 1) * (nos ? 0.92 : 1);
     lSpeed *= Math.exp(-grip * 7 * dt);
-    // steering injects lateral slip at speed (drift feel)
-    lSpeed += input.steer * fSpeed * (input.handbrake ? 0.5 : 0.12) * dt * speedFactor;
+    // smoothed steering injects progressive lateral slip at speed
+    lSpeed += this.steerSmoothed * fSpeed * (input.handbrake ? 0.5 : 0.12) * dt * speedFactor;
     this.drifting = Math.abs(lSpeed) > 3.5 && Math.abs(fSpeed) > 8;
 
     // recompose
@@ -183,6 +189,8 @@ export class CarController {
     this.pos.set(x, 0, z);
     this.yaw = yaw;
     this.vel.set(0, 0);
+    this.steerSmoothed = 0;
+    this.steerVis = 0;
     this.mesh.position.set(x, 0, z);
     this.mesh.rotation.set(0, yaw, 0);
   }

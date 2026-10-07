@@ -77,6 +77,10 @@ addEventListener('keydown', (e) => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
+window.addEventListener('blur', () => {
+  for (const k in keys) keys[k] = false;
+  touchState.left = touchState.right = touchState.throttle = touchState.brake = touchState.nitro = false;
+});
 
 function bindTouch(id: string, down: () => void, up: () => void) {
   const el = document.getElementById(id)!;
@@ -93,8 +97,9 @@ bindTouch('t-action', () => onAction(), () => { });
 
 function readInput(): CarInput {
   const i = emptyInput();
-  i.steer = (keys['KeyA'] || keys['ArrowLeft'] || touchState.left ? -1 : 0)
-    + (keys['KeyD'] || keys['ArrowRight'] || touchState.right ? 1 : 0);
+  const left = keys['KeyA'] || keys['ArrowLeft'] || touchState.left;
+  const right = keys['KeyD'] || keys['ArrowRight'] || touchState.right;
+  i.steer = (left ? -1 : 0) + (right ? 1 : 0);
   i.throttle = (keys['KeyW'] || keys['ArrowUp'] || touchState.throttle) ? 1 : 0;
   i.brake = (keys['KeyS'] || keys['ArrowDown'] || touchState.brake) ? 1 : 0;
   i.handbrake = !!keys['Space'];
@@ -106,38 +111,74 @@ function readInput(): CarInput {
 }
 
 // ---------- camera ----------
-const CAM_MODES = [
-  { dist: 9.5, height: 4.2, look: 10 },
-  { dist: 15, height: 7, look: 12 },
-  { dist: 0.4, height: 1.55, look: 30 },
+interface CamConfig {
+  name: string;
+  dist: number;
+  height: number;
+  look: number;
+  lerpSpeed: number;
+}
+
+const CAM_MODES: CamConfig[] = [
+  { name: 'Chase Camera', dist: 9.5, height: 4.2, look: 10, lerpSpeed: 6.5 },
+  { name: 'Far Camera', dist: 15.0, height: 7.0, look: 12, lerpSpeed: 4.5 },
+  { name: 'Hood Camera', dist: 0.4, height: 1.55, look: 30, lerpSpeed: 16.0 },
 ];
 let camMode = 0;
 const camPos = new THREE.Vector3(0, 6, 12);
-function cycleCamera() { camMode = (camMode + 1) % CAM_MODES.length; }
+const camLookTarget = new THREE.Vector3(0, 1.2, 0);
+
+function cycleCamera() {
+  camMode = (camMode + 1) % CAM_MODES.length;
+  hud.toast(CAM_MODES[camMode].name, '', 1400);
+}
+
+function resetCamera() {
+  if (!player) return;
+  const m = CAM_MODES[camMode];
+  const fwd = player.forward;
+  camPos.set(player.pos.x - fwd.x * m.dist, player.pos.y + m.height, player.pos.z - fwd.y * m.dist);
+  camLookTarget.set(player.pos.x + fwd.x * m.look, player.pos.y + (camMode === 2 ? 1.4 : 1.2), player.pos.z + fwd.y * m.look);
+  camera.position.copy(camPos);
+  camera.lookAt(camLookTarget);
+}
 
 function updateCamera(dt: number) {
   const m = CAM_MODES[camMode];
   const fwd = player.forward;
   const speed01 = Math.min(1, player.speed / 70);
-  camera.fov = 62 + speed01 * 14 + (player.nitroAmount > 0 && keys['ShiftLeft'] ? 4 : 0);
-  camera.updateProjectionMatrix();
-  if (camMode === 2) {
-    const target = new THREE.Vector3(player.pos.x - fwd.x * m.dist, m.height, player.pos.z - fwd.y * m.dist);
-    camPos.lerp(target, Math.min(1, dt * 20));
-    camera.position.copy(camPos);
-    camera.lookAt(player.pos.x + fwd.x * m.look, 1.4, player.pos.z + fwd.y * m.look);
-    return;
+
+  // Smooth dynamic FOV transitions (speed warp & nitrous boost)
+  const nosActive = (keys['ShiftLeft'] || keys['ShiftRight'] || touchState.nitro) && player.nitroAmount > 0;
+  const targetFov = 62 + speed01 * 14 + (nosActive ? 5 : 0);
+  const fovDiff = targetFov - camera.fov;
+  if (Math.abs(fovDiff) > 0.02) {
+    camera.fov += fovDiff * Math.min(1, dt * 6.0);
+    camera.updateProjectionMatrix();
   }
-  const target = new THREE.Vector3(
-    player.pos.x - fwd.x * m.dist + player.vel.x * 0.06,
-    m.height,
-    player.pos.z - fwd.y * m.dist + player.vel.y * 0.06,
-  );
-  camPos.lerp(target, Math.min(1, dt * 5));
+
+  // Desired camera position with velocity anticipation
+  const targetX = player.pos.x - fwd.x * m.dist + player.vel.x * 0.05;
+  const targetY = player.pos.y + m.height;
+  const targetZ = player.pos.z - fwd.y * m.dist + player.vel.y * 0.05;
+  const target = new THREE.Vector3(targetX, targetY, targetZ);
+
+  // Smooth position lerp transition
+  camPos.lerp(target, Math.min(1, dt * m.lerpSpeed));
   camera.position.copy(camPos);
-  camera.lookAt(player.pos.x + fwd.x * m.look, 1.2, player.pos.z + fwd.y * m.look);
-  // subtle shake at speed
-  const shake = speed01 * 0.05;
+
+  // Smooth gaze/look-at interpolation to eliminate harsh yaw shearing
+  const lookHeight = camMode === 2 ? 1.4 : 1.2;
+  const desiredLook = new THREE.Vector3(
+    player.pos.x + fwd.x * m.look,
+    player.pos.y + lookHeight,
+    player.pos.z + fwd.y * m.look,
+  );
+  camLookTarget.lerp(desiredLook, Math.min(1, dt * 9.5));
+  camera.lookAt(camLookTarget);
+
+  // Subtle speed vibration
+  const shake = speed01 * 0.04;
   camera.position.y += (Math.random() - 0.5) * shake;
 }
 
@@ -163,6 +204,7 @@ function swapPlayer(id: string) {
   if (player) scene.remove(player.mesh);
   player = buildPlayer(id);
   player.place(start.x, start.z, yaw);
+  resetCamera();
 }
 
 function setupWorld() {
@@ -172,6 +214,7 @@ function setupWorld() {
   scene.add(races.root);
   swapPlayer(save.selected);
   player.place(0, 20, 0);
+  resetCamera();
 }
 
 // ---------- races ----------
