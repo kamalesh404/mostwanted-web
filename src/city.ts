@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { ModelMap } from './assets';
+import type { ModelMap } from './assets.ts';
 
 export const PITCH = 96;   // distance between road centerlines (m)
 export const ROAD_W = 16;  // road width (m)
@@ -248,6 +248,19 @@ export function buildCity(models: ModelMap): CityData {
   return data;
 }
 
+export const WORLD_BOUND_LIMIT = WORLD_HALF + 23;
+
+/** Clamp position to remain within the city perimeter barriers. */
+export function clampToBounds(pos: THREE.Vector3, radius: number): boolean {
+  let clamped = false;
+  const bound = WORLD_BOUND_LIMIT - radius;
+  if (pos.x < -bound) { pos.x = -bound; clamped = true; }
+  else if (pos.x > bound) { pos.x = bound; clamped = true; }
+  if (pos.z < -bound) { pos.z = -bound; clamped = true; }
+  else if (pos.z > bound) { pos.z = bound; clamped = true; }
+  return clamped;
+}
+
 /** Push a circle out of the city colliders; returns the hit normal or null. */
 export function resolveCollisions(pos: THREE.Vector3, radius: number, colliders: AABB[]): THREE.Vector2 | null {
   let hit: THREE.Vector2 | null = null;
@@ -257,12 +270,53 @@ export function resolveCollisions(pos: THREE.Vector3, radius: number, colliders:
     const dx = pos.x - cx, dz = pos.z - cz;
     const d2 = dx * dx + dz * dz;
     if (d2 < radius * radius) {
-      const d = Math.sqrt(d2) || 0.0001;
-      const nx = dx / d, nz = dz / d;
-      const push = radius - d;
-      pos.x += nx * push; pos.z += nz * push;
-      hit = new THREE.Vector2(nx, nz);
+      if (d2 > 0.000001) {
+        const d = Math.sqrt(d2);
+        const nx = dx / d, nz = dz / d;
+        const push = radius - d;
+        pos.x += nx * push;
+        pos.z += nz * push;
+        hit = new THREE.Vector2(nx, nz);
+      } else {
+        // Center penetrated deep inside collider AABB: push out along minimal penetration axis
+        const distLeft = pos.x - c.minX;
+        const distRight = c.maxX - pos.x;
+        const distTop = pos.z - c.minZ;
+        const distBottom = c.maxZ - pos.z;
+        const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+        if (minDist === distLeft) {
+          pos.x = c.minX - radius;
+          hit = new THREE.Vector2(-1, 0);
+        } else if (minDist === distRight) {
+          pos.x = c.maxX + radius;
+          hit = new THREE.Vector2(1, 0);
+        } else if (minDist === distTop) {
+          pos.z = c.minZ - radius;
+          hit = new THREE.Vector2(0, -1);
+        } else {
+          pos.z = c.maxZ + radius;
+          hit = new THREE.Vector2(0, 1);
+        }
+      }
     }
   }
+
+  // Hard clamp against outer city boundary barriers
+  const bound = WORLD_BOUND_LIMIT - radius;
+  if (pos.x < -bound) {
+    pos.x = -bound;
+    hit = new THREE.Vector2(1, 0);
+  } else if (pos.x > bound) {
+    pos.x = bound;
+    hit = new THREE.Vector2(-1, 0);
+  }
+  if (pos.z < -bound) {
+    pos.z = -bound;
+    hit = new THREE.Vector2(0, 1);
+  } else if (pos.z > bound) {
+    pos.z = bound;
+    hit = new THREE.Vector2(0, -1);
+  }
+
   return hit;
 }

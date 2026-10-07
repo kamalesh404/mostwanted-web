@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { resolveCollisions, type AABB, type CityData } from './city';
-import { type CarSpec, type UpgradeState } from './types';
+import { resolveCollisions, WORLD_BOUND_LIMIT, type AABB, type CityData } from './city.ts';
+import { type CarSpec, type UpgradeState } from './types.ts';
 
 export interface CarInput {
   steer: number;   // -1..1
@@ -27,6 +27,7 @@ export function effectiveStats(spec: CarSpec, upg?: UpgradeState): CarStats {
 const NITRO_CAPACITY = 100;
 const NITRO_DRAIN = 34;   // per second
 const NITRO_REFILL = 9;   // per second
+const MAX_VELOCITY_CAP = 85; // absolute upper cap (m/s ~306 km/h)
 
 export class CarController {
   spec: CarSpec;
@@ -131,12 +132,36 @@ export class CarController {
       const n = new THREE.Vector2(hit.x, hit.y);
       const vn = this.vel.dot(n);
       if (vn < 0) {
-        this.vel.sub(n.clone().multiplyScalar(vn * 1.4)); // bounce
-        const force = Math.min(1, -vn / 25);
+        // Controlled elastic rebound: restitution impulse capped to prevent velocity spikes
+        const rebound = Math.min(-vn * 1.35, 26);
+        this.vel.add(n.clone().multiplyScalar(rebound));
+        const force = Math.min(1, -vn / 22);
         if (force > 0.12) this.crashedInto?.(force);
       }
-      this.vel.multiplyScalar(0.82);
+      // Damped post-collision velocity and tangential surface scrub
+      this.vel.multiplyScalar(0.78);
+      const postSpeed = this.vel.length();
+      if (postSpeed > top * 1.1) {
+        this.vel.setLength(top * 1.1);
+      }
     }
+
+    // --- boundary clamping sanity check ---
+    const bound = WORLD_BOUND_LIMIT - this.radius;
+    if (Math.abs(this.pos.x) > bound) {
+      this.pos.x = Math.sign(this.pos.x) * bound;
+      this.vel.x = -this.vel.x * 0.3; // dampen and rebound inward
+    }
+    if (Math.abs(this.pos.z) > bound) {
+      this.pos.z = Math.sign(this.pos.z) * bound;
+      this.vel.y = -this.vel.y * 0.3; // dampen and rebound inward
+    }
+
+    // Absolute upper velocity clamp to prevent runaway physics
+    if (this.vel.length() > MAX_VELOCITY_CAP) {
+      this.vel.setLength(MAX_VELOCITY_CAP);
+    }
+
     if (this.tireDamage > 0) this.tireDamage -= dt;
 
     // --- visuals ---
