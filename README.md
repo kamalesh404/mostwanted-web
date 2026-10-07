@@ -21,95 +21,161 @@
 
 ## 🎮 What is this?
 
-A complete, self-contained arcade racing game built as a **non-commercial fan tribute** to NFS Most Wanted 2005 — rebuilt from scratch for the web. No engine downloads, no installs: open the link and drive. Every car and building is a **real 3D model (GLB)**, not placeholder boxes (attribution in [CREDITS.md](CREDITS.md)).
+A complete, self-contained arcade racing game built as a **non-commercial fan tribute** to NFS Most Wanted 2005 — rebuilt from scratch for modern browsers. No engine downloads, no external plugins: open the link and drive. Every car and building is a **real 3D model (GLB)**, not placeholder geometry (attribution in [CREDITS.md](CREDITS.md)).
 
-### Core loop
+### Core Game Loop
 ```
-Free roam the city → win street races → attract police heat → evade pursuits
-        ▲                                                   │
-        └── win boss races, take their car ◄── challenge Blacklist boss
+Free roam the city ──► Win street races ──► Attract police heat ──► Evade pursuits
+        ▲                                                               │
+        └─── Win boss races & take their car ◄── Challenge Blacklist ───┘
 ```
 
-### Features
+### Key Features
 
-| | |
+| Feature | Description |
 |---|---|
-| 🌆 **Open-world city** | 9×9-block 3D city with traffic, parks, parking lots and real building models |
-| 🏎️ **8 drivable cars** | Distinct stats, buyables + boss rewards; Engine / Handling / Nitrous upgrade trees |
-| 🚓 **Police pursuits** | Pursuit meter, **heat levels 1–5**, ramming interceptors, roadblocks, spike strips — evade or get busted and fined |
-| 🏁 **Street races** | 5 checkpoint races (sprints + circuits) paying cash; finish 1st |
-| 👑 **Blacklist** | 5 bosses (Razor → Sonny); earn the right to challenge them, beat a boss to take their car |
-| 💾 **Auto-save** | Cash, cars, upgrades and blacklist progress persist in `localStorage` |
-| 🔊 **Procedural audio** | Engine, sirens, skids and crashes synthesized live with Web Audio — zero audio files |
-| 📱 **Mobile support** | On-screen steering, NOS and brake buttons with auto-throttle |
+| 🌆 **Open-world city** | 9×9-block 3D city with dynamic traffic, parks, parking lots, streetlights, and detailed building models |
+| 🏎️ **8 drivable cars** | Distinct handling curves, purchase options + boss trophy rewards; Engine, Handling, and Nitrous upgrade stages |
+| 🚓 **Police pursuits** | Dynamic pursuit meter, **heat levels 1–5**, ramming interceptors, road roadblocks, and spike strips |
+| 🏁 **Street races** | 5 checkpoint races (sprints and circuits) with cash payouts and rubber-band rival AI |
+| 👑 **Blacklist Ladder** | 5 bosses (Razor → Sonny); fulfill win conditions, challenge rivals, and claim their custom rides |
+| 💾 **Auto-save** | Cash, unlocked vehicles, performance parts, and Blacklist milestones persist in `localStorage` |
+| 🔊 **Procedural audio** | Engine throttle, sirens, skids, and impact crashes synthesized live via the Web Audio API |
+| 📱 **Mobile support** | Responsive touch controls featuring analog-style steering buttons, boost, brake, and auto-throttle |
 
-## ⌨️ Controls
+---
 
-| Action | Keys |
-|---|---|
-| Drive / steer | `WASD` or arrow keys |
-| Nitrous | `Shift` |
-| Handbrake / drift | `Space` |
-| Action (start race / garage) | `E` |
-| Camera (chase / far / hood) | `C` |
-| Mute | `M` |
+## ⌨️ Control Map
 
-## 🛠️ Tech stack
+### Desktop Controls
 
-- **Vite + TypeScript + three.js** — fast static build, one runtime dependency
-- **Custom arcade physics** — velocity, drift, grip, impulse collisions (no heavyweight physics engine)
-- **GLTF/Draco asset pipeline** — 14 MB of real GLB models, loading screen with progress
-- **Web Audio API** — fully procedural sound design
-- **GitHub Actions** — CI build + deploy to GitHub Pages on every push
+| Action | Primary Key | Secondary Key | Notes |
+|---|---|---|---|
+| **Accelerate** | `W` | `Up Arrow` | Forward drive with top-speed gearing |
+| **Steer Left** | `A` | `Left Arrow` | Dynamically smoothed turn response |
+| **Steer Right** | `D` | `Right Arrow` | Dynamically smoothed turn response |
+| **Brake / Reverse** | `S` | `Down Arrow` | Progressive braking / reverse gear |
+| **Handbrake / Drift** | `Space` | — | Breaks rear grip for initiating controlled power-slides |
+| **Nitrous Boost** | `Left Shift` | `Right Shift` | Drains NOS reserve to provide sudden torque burst |
+| **Interact / Action** | `E` | — | Enters safehouse garage, initiates street races, or challenges bosses |
+| **Cycle Camera** | `C` | — | Cycles between Chase (near), Far (orbit), and Hood views |
+| **Audio Mute** | `M` | — | Toggles Web Audio synthesizer output |
 
-## 🚀 Run locally
+### Camera Modes
+
+* **Chase Camera** (Default): Centered third-person chase camera with dynamic speed warp, velocity anticipation, and smoothed yaw tracking.
+* **Far Camera**: Elevated panoramic chase view providing higher situational awareness during police chases and crowded intersections.
+* **Hood Camera**: Low-slung front-hood perspective providing direct road-level speed immersion.
+
+### Mobile & Touch Controls
+
+When launched on touch-enabled devices, on-screen virtual buttons are automatically mounted:
+* **Steer Left (`◀`) & Steer Right (`▶`)**: Touch-hold buttons for steering input.
+* **Nitrous (`NOS`)**: Instant boost engagement with tactile HUD depletion gauge.
+* **Brake (`BRAKE`)**: Hard braking; when released, auto-throttle maintains cruise speed.
+* **Action (`ACTION`)**: Contextual trigger for race start points and safehouse garage entries.
+
+---
+
+## 📐 Architecture & Subsystems
+
+The project uses a modular, component-based TypeScript architecture built directly on three.js without heavyweight third-party physics engines:
+
+```
+src/
+├── main.ts         # Game loop, rendering pipeline, camera controller & mode states
+├── car.ts          # Vehicle dynamics, steering smoothing, bounce damping & boundary clamps
+├── city.ts         # Procedural 9x9 city grid, instanced meshes & AABB spatial collisions
+├── ai.ts           # Traffic flow simulation & rubber-band rival racer pathfinding
+├── police.ts       # Pursuit state machine, heat levels (1-5), roadblocks & spike strips
+├── races.ts        # Sprint & circuit checkpoint navigation, timers & leaderboards
+├── blacklist.ts    # Boss progression requirements, ladder rewards & rival profiles
+├── garage.ts       # Car dealership, performance upgrade trees & paint previews
+├── hud.ts          # Canvas-rendered HUD, analog speedometer, pursuit meter & radar minimap
+├── audio.ts        # Web Audio API procedural synthesis (engine pitch, sirens, skids, crash)
+├── save.ts         # LocalStorage persistence, profile serialization & migration
+├── assets.ts       # GLTF loader pipeline with Draco compression & model caching
+└── types.ts        # Shared data definitions, vehicle specifications & game interfaces
+```
+
+### Vehicle Dynamics & Physics Model (`src/car.ts`)
+* **Newtonian Forward/Lateral Decomposition**: Speed is split into forward heading and lateral drift components. Lateral grip decays exponentially based on tire compound and handling upgrades.
+* **Rate-Smoothed Steering**: Raw keyboard binary inputs (-1 / 0 / 1) pass through a dynamic responsiveness filter with quick grip-based turn entry and swift spring centering upon release.
+* **Collision Velocity Limiting**: Wall and obstacle impacts resolve elastic rebound with energy dissipation (`restitution ≈ 0.35`), tangential scrub damping, and an absolute safety cap (`MAX_VELOCITY_CAP = 85 m/s`) to prevent pinball slingshots.
+* **Boundary Containment**: Position coordinates are continuously clamped against the city perimeter barrier boundaries (`WORLD_BOUND_LIMIT = 407m`), dampening velocity inward if boundary limits are breached.
+
+### Procedural Generation & Rendering (`src/city.ts`)
+* **Instanced Batching**: Buildings, trees, streetlights, and road markings leverage `THREE.InstancedMesh` for minimal draw calls.
+* **Spatial Collision Detection**: Obstacles generate 2D Axis-Aligned Bounding Boxes (AABB). The collision resolver detects overlaps, calculates minimal penetration axes, and pushes vehicles outside obstacle hulls.
+
+---
+
+## 🚀 Local Setup & Development Guide
+
+### Prerequisites
+* **Node.js**: v20.x or higher (Node.js v22/v24 recommended)
+* **npm**: v10.x or higher
+
+### Installation
 
 ```bash
+# Clone the repository
 git clone https://github.com/kamalesh404/mostwanted-web.git
 cd mostwanted-web
+
+# Install dependencies
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # static bundle in dist/
-npm run preview
 ```
 
-Total payload is ~15 MB (14 MB of GLB models) — the loading screen shows progress.
+> [!NOTE]
+> **Windows PowerShell Users**: If running `npm` produces a script execution policy error (`PSSecurityException`), use `npm.cmd` directly:
+> ```powershell
+> npm.cmd install
+> npm.cmd run dev
+> ```
 
-## ☁️ Deploy to GitHub Pages
+### Available Scripts
 
-A workflow at [.github/workflows/deploy.yml](.github/workflows/deploy.yml) builds and deploys on every push to `main`. In the repo settings, set **Pages → Source → GitHub Actions**. The Vite base path is set automatically from the repository name.
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Starts Vite local development server at `http://localhost:5173` with Hot Module Replacement (HMR) |
+| `npm run build` | Runs TypeScript compilation (`tsc`) and generates an optimized production bundle in `dist/` |
+| `npm run preview` | Spins up a local static server to test the production bundle |
+| `npm run typecheck` | Validates TypeScript types across the entire project (`tsc --noEmit`) |
+| `npm test` | Runs the automated physics and game math unit test suite using Node's native test runner |
 
-## 📁 Project structure
+### Running Tests
 
-```
-mostwanted-web/
-├── index.html
-├── public/
-│   ├── models/        # GLB car/building/prop models (real 3D assets)
-│   └── textures/
-├── src/
-│   ├── main.ts        # game loop, renderer, state machine
-│   ├── assets.ts      # GLTF loading, Draco, pooling, progress screen
-│   ├── city.ts        # city assembly from road/building assets
-│   ├── car.ts         # car controller + arcade physics
-│   ├── ai.ts          # rival racers + traffic
-│   ├── police.ts      # pursuit AI, heat levels, roadblocks
-│   ├── races.ts       # sprint/circuit race logic
-│   ├── blacklist.ts   # rival ladder + rewards
-│   ├── garage.ts      # car selection + upgrades
-│   ├── hud.ts         # speedometer, nitrous, pursuit meter, minimap
-│   ├── audio.ts       # procedural sounds
-│   └── save.ts        # localStorage persistence
-└── docs/banner.svg    # project banner
+Automated unit tests verify boundary containment, AABB ejection algorithms, and vehicle upgrade math:
+
+```bash
+npm test
 ```
 
+---
 
-## ⚖️ License
+## ☁️ Deployment
 
-Code: MIT. Game assets: see [CREDITS.md](CREDITS.md) (CC0 / CC-BY 3.0 / one CC-BY-NC model used non-commercially).
+Automated CI/CD is configured via GitHub Actions in [.github/workflows/deploy.yml](.github/workflows/deploy.yml).
+
+Every push to the `main` branch triggers:
+1. Fresh dependency installation.
+2. Full TypeScript type checking and asset bundling via `npm run build`.
+3. Automated deployment of the `dist/` directory to **GitHub Pages**.
+
+To enable on a fork:
+1. Navigate to repository **Settings → Pages**.
+2. Under **Build and deployment → Source**, choose **GitHub Actions**.
+
+---
+
+## ⚖️ License & Attribution
+
+* **Code**: Released under the [MIT License](LICENSE).
+* **3D Assets & Models**: See [CREDITS.md](CREDITS.md) for full licensing and creator credits (licensed under CC0, CC-BY 3.0, and CC-BY-NC non-commercial fan tribute usage).
 
 ---
 
 <div align="center">
-<sub>Star ⭐ the repo if you enjoy the game — PRs welcome!</sub>
+<sub>Star ⭐ the repo if you enjoy the game — PRs and community contributions are welcome!</sub>
 </div>
